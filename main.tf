@@ -35,6 +35,12 @@ resource "aws_instance" "tf_efs_sandbox" {
   vpc_security_group_ids = ["${module.vpc.sg_allow_22}", "${module.vpc.sg_allow_egress}"]
   key_name               = "${var.key_name}"
 
+  user_data = <<EOF
+#!/bin/bash
+
+yum install -y amazon-efs-utils
+EOF
+
   tags {
     Name = "${var.name}"
   }
@@ -72,4 +78,21 @@ resource "aws_efs_mount_target" "private1" {
   file_system_id  = "${aws_efs_file_system.efs.id}"
   subnet_id       = "${module.vpc.subnet_private1}"
   security_groups = ["${aws_security_group.efs.id}"]
+}
+
+# TF currently doesn't support Access Points: https://github.com/terraform-providers/terraform-provider-aws/issues/12118
+resource "null_resource" "efs_access_point_foo" {
+  provisioner "local-exec" {
+    command = "aws efs create-access-point --client-token foo --file-system-id ${aws_efs_file_system.efs.id} --root-directory 'Path=/foo,CreationInfo={OwnerUid=1001,OwnerGid=1001,Permissions=755}'"
+  }
+
+  depends_on = ["aws_efs_file_system.efs"]
+}
+
+resource "null_resource" "efs_access_point_bar" {
+  provisioner "local-exec" {
+    command = "aws efs create-access-point --client-token bar --file-system-id ${aws_efs_file_system.efs.id} --root-directory 'Path=/bar'"
+  }
+
+  depends_on = ["aws_efs_file_system.efs"]
 }
